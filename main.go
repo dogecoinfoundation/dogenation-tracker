@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -35,9 +36,15 @@ type Store interface {
 	GetRecentDonation() (TX, error)
 }
 
+type Info struct {
+	Amount float64
+	Number int64
+	Largest TX
+	Recent TX
+}
+
 type Cache interface {
-	// GetInfo returns the total amount, number of TXs and the largest donation received in that order
-	GetInfo() (float64, int64, TX, error)
+	GetInfo() (Info, error)
 }
 
 type Config struct {
@@ -59,14 +66,6 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	//result, err := NewAPIFetcher(c.Wallet).GetTXChan("")
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//for v := range result {
-	//	fmt.Println(v)
-	//}
 
 	f := NewAPIFetcher(c.Wallet)
 
@@ -84,7 +83,68 @@ func main() {
 	}
 	cache := NewMemCache(store)
 
-	fmt.Println(cache.GetInfo())
+	//fmt.Println(cache.GetInfo())
+
+	// This function uses the PORT environment variable
+	serveHTTPEndpoints(cache)
+}
+
+func serveHTTPEndpoints(c Cache) {
+	mux := http.NewServeMux()
+	// lessen this repetitive mess later on by making a function that takes in a function operating on info and
+	// returning the relevant data and returns a handler
+	mux.HandleFunc("/api/getnumoftxs", func(w http.ResponseWriter, r *http.Request) {
+		info, err := c.GetInfo()
+		if err != nil {
+			return
+		}
+		_, err = w.Write([]byte(toJSON(info.Number)))
+		if err != nil { // write to the client failed
+			fmt.Println("Got error while sending API data", err)
+		}
+	})
+	mux.HandleFunc("/api/amount", func(w http.ResponseWriter, r *http.Request) {
+		info, err := c.GetInfo()
+		if err != nil {
+			return
+		}
+		_, err = w.Write([]byte(toJSON(info.Amount)))
+		if err != nil { // write to the client failed
+			fmt.Println("Got error while sending API data", err)
+		}
+	})
+	mux.HandleFunc("/api/largest", func(w http.ResponseWriter, r *http.Request) {
+		info, err := c.GetInfo()
+		if err != nil {
+			return
+		}
+		_, err = w.Write([]byte(toJSON(info.Largest)))
+		if err != nil { // write to the client failed
+			fmt.Println("Got error while sending API data", err)
+		}
+	})
+	mux.HandleFunc("/api/recent", func(w http.ResponseWriter, r *http.Request) {
+		info, err := c.GetInfo()
+		if err != nil {
+			return
+		}
+		_, err = w.Write([]byte(toJSON(info.Recent)))
+		if err != nil { // write to the client failed
+			fmt.Println("Got error while sending API data", err)
+		}
+	})
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:" + os.Getenv("PORT"), mux)
+		if err != nil {
+			fmt.Println("Serve error", err)
+			os.Exit(127)
+		}
+	}()
+}
+
+func toJSON(v interface{}) string {
+	s, _ := json.MarshalIndent(v, "", "   ")
+	return string(s)
 }
 
 type apiResults struct {
@@ -208,7 +268,8 @@ func (s *SQLiteStore) GetRecentDonation() (TX, error) {
 type MemCache struct {
 	amount float64
 	number int64
-	highest TX
+	largest TX
+	recent TX
 
 	currErr error
 
@@ -228,7 +289,11 @@ func NewMemCache(s Store) *MemCache {
 			if result.currErr != nil {
 				goto End
 			}
-			result.highest, result.currErr = s.GetLargestDonation()
+			result.largest, result.currErr = s.GetLargestDonation()
+			if result.currErr != nil {
+				goto End
+			}
+			result.recent, result.currErr = s.GetRecentDonation()
 			if result.currErr != nil {
 				goto End
 			}
@@ -240,11 +305,16 @@ func NewMemCache(s Store) *MemCache {
 	return result
 }
 
-func (c *MemCache) GetInfo() (float64, int64, TX, error) {
+func (c *MemCache) GetInfo() (Info, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	if c.currErr != nil {
-		return 0, 0, TX{}, c.currErr
+		return Info{}, c.currErr
 	}
-	return c.amount, c.number, c.highest, nil
+	return Info{
+		Amount: c.amount,
+		Number: c.number,
+		Largest: c.largest,
+		Recent: c.recent,
+	}, nil
 }
