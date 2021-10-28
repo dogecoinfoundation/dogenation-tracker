@@ -32,6 +32,7 @@ type Store interface {
 	GetTotalAmount() (float64, error)
 	GetNumOfTXs() (int64, error)
 	GetLargestDonation() (TX, error)
+	GetRecentDonation() (TX, error)
 }
 
 type Cache interface {
@@ -190,6 +191,13 @@ func (s *SQLiteStore) GetNumOfTXs() (int64, error) {
 }
 
 func (s *SQLiteStore) GetLargestDonation() (TX, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	// TODO: do a query of the db and get the largest tx
+}
+
+func (s *SQLiteStore) GetRecentDonation() (TX, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
