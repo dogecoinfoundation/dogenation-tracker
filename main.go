@@ -14,13 +14,13 @@ import (
 )
 
 type TX struct {
-	TXID          string
-	OutputNo      int
-	ScriptAsm     string
-	ScriptHex     string
-	Value         string
-	Confirmations int
-	Time          int
+	TXID          string `json:"txid"`
+	OutputNo      int    `json:"output_no"`
+	ScriptAsm     string `json:"script_asm"`
+	ScriptHex     string `json:"script_hex"`
+	Value         string `json:"value"`
+	Confirmations int    `json:"confirmations"`
+	Time          int    `json:"time"`
 }
 
 type Fetcher interface {
@@ -37,10 +37,10 @@ type Store interface {
 }
 
 type Info struct {
-	Amount float64
-	Number int64
+	Amount  float64
+	Number  int64
 	Largest TX
-	Recent TX
+	Recent  TX
 }
 
 type Cache interface {
@@ -134,7 +134,7 @@ func serveHTTPEndpoints(c Cache) {
 		}
 	})
 	go func() {
-		err := http.ListenAndServe("0.0.0.0:" + os.Getenv("PORT"), mux)
+		err := http.ListenAndServe("0.0.0.0:"+os.Getenv("PORT"), mux)
 		if err != nil {
 			fmt.Println("Serve error", err)
 			os.Exit(127)
@@ -214,9 +214,8 @@ func (a APIFetcher) GetTXChan(afterTXID string) (chan TX, error) {
 	return result, nil
 }
 
-
 type SQLiteStore struct {
-	db *sql.DB
+	db   *sql.DB
 	lock *sync.RWMutex
 }
 
@@ -266,10 +265,10 @@ func (s *SQLiteStore) GetRecentDonation() (TX, error) {
 
 // MemCache is a Cache that updates every second
 type MemCache struct {
-	amount float64
-	number int64
+	amount  float64
+	number  int64
 	largest TX
-	recent TX
+	recent  TX
 
 	currErr error
 
@@ -297,7 +296,7 @@ func NewMemCache(s Store) *MemCache {
 			if result.currErr != nil {
 				goto End
 			}
-			End:
+		End:
 			result.lock.Unlock()
 			time.Sleep(time.Second)
 		}
@@ -312,9 +311,9 @@ func (c *MemCache) GetInfo() (Info, error) {
 		return Info{}, c.currErr
 	}
 	return Info{
-		Amount: c.amount,
-		Number: c.number,
+		Amount:  c.amount,
+		Number:  c.number,
 		Largest: c.largest,
-		Recent: c.recent,
+		Recent:  c.recent,
 	}, nil
 }
