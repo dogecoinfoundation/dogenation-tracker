@@ -16,3 +16,6 @@
 
 teamseas
 config.json
+txData.db
+.idea
+queries_spec.sh
